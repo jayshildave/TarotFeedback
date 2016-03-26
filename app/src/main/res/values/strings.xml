@@ -36,7 +36,12 @@
     <string name="title_activity_about">About Me</string>
     <string name="action_info">Info</string>
     <string name="action_share">Share</string>
+    <string name="action_invite">Invite</string>
     <string name="action_renew">Refresh</string>
     <string name="about_content">Hi, I am Apeksha and I do <b>Tarot Reading</b> professionally. \n\nI have expertize in reading <b>Tarot Cards</b> and <b>Angel Cards</b>. \n\nTarot card reading is completely a personal and confidential reading. One can ask questions related to their past, present and future life situations. Questions can be related to any aspects of life such as Health, Education, Career, Relationships, Marriage, Family, Friends and many more. \n\nThe reading process is based on meditation power which helps gather vibes based on your full-name and accordingly i analyze and interpret the cards. Your main question in mind will appear in the first general reading spread and further will formulate more spreads for all the different questions you have. The spreads will answer your questions. \n\nI have done more than 150 reads so far. If you wish to provide feedback, please do comment on your reading experience and give rating accordingly. Your inputs and feedback will be very helpful. \n\nTo know the root causes, effects and solutions for your past, present and future life situations. Experience a unique reading session with me. You can contact me using the email icon in the bottom right corner of the screen.\n\n\n</string>
     <string name="get_username_error">Problem fetching information from Facebook</string>
+    <string name="invitation_title">Send Tarot Feedback App Invite</string>
+    <string name="invitation_message">This app is for Tarot Reading feedback performed by Apeksha. Please share your feedback</string>
+    <string name="invitation_cta">Install!</string>
+
 </resources>

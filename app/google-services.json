@@ -1,0 +1,52 @@
+{
+  "project_info": {
+    "project_id": "tarot-feedback",
+    "project_number": "30258990739",
+    "name": "Tarot Feedback"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:30258990739:android:70d11e2f12b97e73",
+        "client_id": "android:com.apex.tarot.feedback",
+        "client_type": 1,
+        "android_client_info": {
+          "package_name": "com.apex.tarot.feedback",
+          "certificate_hash": []
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "30258990739-33t88eh4m1733tr5u0gtnu6f6aj3rl7i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apex.tarot.feedback",
+            "certificate_hash": "9F89C09D909D2FC37F99116C6051C157D10A2D0A"
+          }
+        }
+      ],
+      "api_key": [],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "cloud_messaging_service": {
+          "status": 1,
+          "apns_config": []
+        },
+        "appinvite_service": {
+          "status": 2,
+          "other_platform_oauth_client": []
+        },
+        "google_signin_service": {
+          "status": 1
+        },
+        "ads_service": {
+          "status": 1
+        }
+      }
+    }
+  ],
+  "client_info": [],
+  "ARTIFACT_VERSION": "1"
+}

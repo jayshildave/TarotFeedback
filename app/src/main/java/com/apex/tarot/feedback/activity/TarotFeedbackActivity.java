@@ -3,9 +3,7 @@ package com.apex.tarot.feedback.activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.graphics.PorterDuff;
-import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.ActionBar;
@@ -25,32 +23,47 @@ import android.widget.EditText;
 import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import com.apex.tarot.feedback.R;
 import com.apex.tarot.feedback.entity.Feedback;
 import com.apex.tarot.feedback.view.CommentEditText;
 import com.facebook.AccessToken;
+import com.facebook.CallbackManager;
+import com.facebook.FacebookCallback;
+import com.facebook.FacebookException;
+import com.facebook.FacebookSdk;
 import com.facebook.GraphRequest;
 import com.facebook.GraphResponse;
-import com.parse.FindCallback;
-import com.parse.GetCallback;
-import com.parse.LogInCallback;
-import com.parse.ParseException;
-import com.parse.ParseFacebookUtils;
-import com.parse.ParseObject;
-import com.parse.ParseQuery;
-import com.parse.ParseUser;
-import com.parse.SaveCallback;
+import com.facebook.login.LoginManager;
+import com.facebook.login.LoginResult;
+import com.google.android.gms.appinvite.AppInviteInvitation;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.List;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.Headers;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 
 public class TarotFeedbackActivity extends BaseActivity {
 
     private List<Feedback> feedbackList;
+    private CallbackManager facebookCallbackManager;
+    private static final String FETCH_FEEDBACK_LIST = "https://fed-tarot.restdb.io/rest/feedback.json?q={%22moderated%22:%22true%22}&sort=updated-at&dir=-1";
+    private final OkHttpClient okHttpClient = new OkHttpClient();
+    private static final String API_KEY = "3d7ee7bc98bb12651c600f57014d8a362c8d3";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,17 +76,11 @@ public class TarotFeedbackActivity extends BaseActivity {
         final ActionBar ab = getSupportActionBar();
         ab.setDisplayHomeAsUpEnabled(false);
 
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
+        FloatingActionButton fablogin = (FloatingActionButton) findViewById(R.id.fab_login);
+        fablogin.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-
-                if (TextUtils.isEmpty(getUsername())) {
-                    loginUsingFacebook();
-                } else {
-                    Feedback feedback = readFromPreference();
-                    addFeedback(feedback.getUser());
-                }
+                facebookLogin();
             }
         });
         RecyclerView rv = (RecyclerView) findViewById(R.id.recyclerview);
@@ -86,26 +93,53 @@ public class TarotFeedbackActivity extends BaseActivity {
 
     private void updateList() {
         showProgress(getString(R.string.feedback_progress));
-        ParseQuery<ParseObject> query = ParseQuery.getQuery("Feedback");
-        query.addDescendingOrder("updatedAt");
-        query.whereEqualTo("moderated", true);
-        query.findInBackground(new FindCallback<ParseObject>() {
+        Request request = new Request.Builder()
+                .url(FETCH_FEEDBACK_LIST)
+                .addHeader("x-apikey", API_KEY)
+                .build();
+        okHttpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
+            }
 
             @Override
-            public void done(List list, ParseException e) {
-                dismissProgress();
-                if (e == null) {
-                    feedbackList = Feedback.parseResponse(list);
+            public void onResponse(Call call, Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    Headers responseHeaders = response.headers();
+                    for (int i = 0; i < responseHeaders.size(); i++) {
+                        Log.d("TarotFeedback", responseHeaders.name(i) + ": " + responseHeaders.value(i));
+                    }
+                    Gson gson = new Gson();
+                    Type type = new TypeToken<List<Feedback>>() {
+                    }.getType();
+                    feedbackList = gson.fromJson(response.body().string(), type);
 
-                    RecyclerView rv = (RecyclerView) findViewById(R.id.recyclerview);
-                    setupRecyclerView(rv);
-                    // object will be your game score
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            updateUIList();
+                        }
+                    });
                 } else {
-                    Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
-                    // something went wrong
+                    Log.d("TarotFeedback", "response :: "+response.isSuccessful());
+                    Log.d("TarotFeedback", "response :: "+response.code());
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+
                 }
             }
         });
+    }
+
+    private void updateUIList() {
+        dismissProgress();
+        RecyclerView rv = (RecyclerView) findViewById(R.id.recyclerview);
+        setupRecyclerView(rv);
     }
 
     private void setupRecyclerView(RecyclerView recyclerView) {
@@ -157,68 +191,49 @@ public class TarotFeedbackActivity extends BaseActivity {
         }
     }
 
-    private void loginUsingFacebook() {
-        List<String> permissions = Arrays.asList("public_profile", "email");
-        showProgress("Logging in...");
-        ParseFacebookUtils.logInWithReadPermissionsInBackground(this, permissions, new LogInCallback() {
+    private void facebookLogin() {
+        Log.d("TarotFeedback", "facebookLogin called");
+        facebookCallbackManager = CallbackManager.Factory.create();
+        LoginManager.getInstance().registerCallback(facebookCallbackManager, new FacebookCallback<LoginResult>() {
             @Override
-            public void done(ParseUser user, ParseException err) {
-                dismissProgress();
-                if (user == null) {
-                    return;
-                } else if (user.isNew()) {
-                    getUserDetails(user);
-                } else {
-                    getUserDetails(user);
-                }
+            public void onSuccess(LoginResult loginResult) {
+                Log.d("TarotFeedback", loginResult.getAccessToken().getUserId());
+                Log.d("TarotFeedback", loginResult.getAccessToken().getApplicationId());
+                Log.d("TarotFeedback", loginResult.getAccessToken().getToken());
+                getUserDetails(loginResult.getAccessToken());
+            }
+
+            @Override
+            public void onCancel() {
+                Log.d("TarotFeedback", "User cancelled");
+            }
+
+            @Override
+            public void onError(FacebookException error) {
+                Log.d("TarotFeedback", "Error " + error.toString());
             }
         });
+        List<String> permissions = Arrays.asList("public_profile", "email");
+        LoginManager.getInstance().logInWithReadPermissions(this, permissions);
     }
 
-    private void getUserDetails(final ParseUser parseUser) {
+    private void getUserDetails(AccessToken accessToken) {
         showProgress(getString(R.string.get_username_progress));
-        GraphRequest graphRequest = GraphRequest.newMeRequest(AccessToken.getCurrentAccessToken(), new GraphRequest.GraphJSONObjectCallback() {
+        GraphRequest graphRequest = GraphRequest.newMeRequest(accessToken, new GraphRequest.GraphJSONObjectCallback() {
             @Override
-            public void onCompleted(JSONObject jsonObject, GraphResponse graphResponse) {
-
-                if (jsonObject != null) {
+            public void onCompleted(JSONObject object, GraphResponse response) {
+                dismissProgress();
+                if (object != null) {
                     try {
-                        final String username = jsonObject.getString("name");
-                        JSONObject userProfile = new JSONObject();
-                        userProfile.put("name", username);
-                        ParseUser currentUser = ParseUser.getCurrentUser();
-                        currentUser.put("profile", userProfile);
-                        currentUser.saveInBackground(new SaveCallback() {
-                            @Override
-                            public void done(ParseException e) {
-                                if (e == null) {
-                                    ParseQuery<ParseObject> query = ParseQuery.getQuery("Feedback");
-                                    query.whereEqualTo("user", username);
-                                    query.getFirstInBackground(new GetCallback<ParseObject>() {
-                                        public void done(ParseObject object, ParseException e) {
-                                            if (object == null) {
-
-                                            } else {
-                                                Feedback feedback = Feedback.parseResponseObject(object);
-                                                saveToPreference(feedback, object.getObjectId());
-                                            }
-                                            dismissProgress();
-                                            saveUsername(username);
-                                            addFeedback(username);
-                                        }
-                                    });
-                                } else {
-                                    dismissProgress();
-                                    Toast.makeText(TarotFeedbackActivity.this, getString(R.string.get_username_error), Toast.LENGTH_SHORT).show();
-                                }
-
-                            }
-                        });
+                        final String username = object.getString("name");
+                        Log.d("TarotFeedback", username);
+                        Log.d("TarotFeedback", object.toString());
+                        saveUsername(username);
+                        addFeedback(username);
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
                 } else {
-                    dismissProgress();
                     Toast.makeText(TarotFeedbackActivity.this, getString(R.string.get_username_error), Toast.LENGTH_SHORT).show();
                 }
             }
@@ -245,7 +260,7 @@ public class TarotFeedbackActivity extends BaseActivity {
         commentEditText.setText(feedbackFromPreference.getFeedback());
         feedbackRating.setRating((float) feedbackFromPreference.getRating());
 
-        if (!TextUtils.isEmpty(feedbackFromPreference.getObjectId())) {
+        if (!TextUtils.isEmpty(feedbackFromPreference.getUser())) {
             saveButton.setText(R.string.update_button_label);
         }
 
@@ -272,7 +287,7 @@ public class TarotFeedbackActivity extends BaseActivity {
                 feedback.setRating(rating);
 
 
-                if (!TextUtils.isEmpty(feedbackFromPreference.getObjectId())) {
+                if (!TextUtils.isEmpty(feedbackFromPreference.getUser())) {
                     showProgress(getString(R.string.update_feedback_progress));
                     final ParseObject updateFeedbackParseObject = Feedback.createParseObject(feedback);
                     updateFeedbackParseObject.setObjectId(feedbackFromPreference.getObjectId());
@@ -318,7 +333,9 @@ public class TarotFeedbackActivity extends BaseActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        ParseFacebookUtils.onActivityResult(requestCode, resultCode, data);
+        if (facebookCallbackManager != null) {
+            facebookCallbackManager.onActivityResult(requestCode, resultCode, data);
+        }
     }
 
     private void saveToPreference(Feedback feedback, String objectID) {
@@ -327,7 +344,6 @@ public class TarotFeedbackActivity extends BaseActivity {
         editor.putString("feedback", feedback.getFeedback());
         editor.putString("user", feedback.getUser());
         editor.putFloat("rating", (float) feedback.getRating());
-        editor.putString("objectID", objectID);
         editor.apply();
     }
 
@@ -349,7 +365,6 @@ public class TarotFeedbackActivity extends BaseActivity {
         feedback.setFeedback(sharedPreferences.getString("feedback", ""));
         feedback.setUser(sharedPreferences.getString("user", ""));
         feedback.setRating(sharedPreferences.getFloat("rating", 0.0f));
-        feedback.setObjectId(sharedPreferences.getString("objectID", ""));
         return feedback;
     }
 
@@ -377,10 +392,20 @@ public class TarotFeedbackActivity extends BaseActivity {
             i.putExtra(Intent.EXTRA_TEXT, "https://play.google.com/store/apps/details?id=com.apex.tarot.feedback");
             startActivity(Intent.createChooser(i, "Share and spread the word"));
             return true;
+        } else if (id == R.id.action_invite) {
+            onInviteClicked();
+            return true;
         }
 
         return super.onOptionsItemSelected(item);
     }
 
+    private void onInviteClicked() {
+        Intent intent = new AppInviteInvitation.IntentBuilder(getString(R.string.invitation_title))
+                .setMessage(getString(R.string.invitation_message))
+                .setCallToActionText(getString(R.string.invitation_cta))
+                .build();
+        startActivityForResult(intent, 1001);
+    }
 
 }
