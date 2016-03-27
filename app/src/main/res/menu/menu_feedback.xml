@@ -23,6 +23,6 @@
         android:id="@+id/action_invite"
         android:icon="@drawable/ic_share"
         android:orderInCategory="103"
-        android:title="@string/action_share"
+        android:title="@string/action_invite"
         app:showAsAction="ifRoom" />
 </menu>

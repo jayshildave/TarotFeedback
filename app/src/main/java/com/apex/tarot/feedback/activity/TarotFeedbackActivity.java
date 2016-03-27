@@ -3,7 +3,6 @@ package com.apex.tarot.feedback.activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.ActionBar;
@@ -31,14 +30,12 @@ import com.facebook.AccessToken;
 import com.facebook.CallbackManager;
 import com.facebook.FacebookCallback;
 import com.facebook.FacebookException;
-import com.facebook.FacebookSdk;
 import com.facebook.GraphRequest;
 import com.facebook.GraphResponse;
 import com.facebook.login.LoginManager;
 import com.facebook.login.LoginResult;
 import com.google.android.gms.appinvite.AppInviteInvitation;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONException;
@@ -52,21 +49,23 @@ import java.util.List;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Headers;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
-
 
 public class TarotFeedbackActivity extends BaseActivity {
 
     private List<Feedback> feedbackList;
     private CallbackManager facebookCallbackManager;
-    private static final String FETCH_FEEDBACK_LIST = "https://fed-tarot.restdb.io/rest/feedback.json?q={%22moderated%22:%22true%22}&sort=updated-at&dir=-1";
+    private static final String FETCH_FEEDBACK_LIST = "https://fed-tarot.restdb.io/rest/feedback.json?q={%22moderated%22:true}&sort=_changed&dir=-1";
+    private static final String ADD_FEEDBACK = "https://fed-tarot.restdb.io/rest/feedback";
     private final OkHttpClient okHttpClient = new OkHttpClient();
     private static final String API_KEY = "3d7ee7bc98bb12651c600f57014d8a362c8d3";
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_tarot_feedback);
 
@@ -80,7 +79,11 @@ public class TarotFeedbackActivity extends BaseActivity {
         fablogin.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                facebookLogin();
+                if (TextUtils.isEmpty(getUsername())) {
+                    facebookLogin();
+                } else {
+                    addFeedback(getUsername());
+                }
             }
         });
         RecyclerView rv = (RecyclerView) findViewById(R.id.recyclerview);
@@ -100,7 +103,12 @@ public class TarotFeedbackActivity extends BaseActivity {
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
 
             @Override
@@ -122,8 +130,8 @@ public class TarotFeedbackActivity extends BaseActivity {
                         }
                     });
                 } else {
-                    Log.d("TarotFeedback", "response :: "+response.isSuccessful());
-                    Log.d("TarotFeedback", "response :: "+response.code());
+                    Log.d("TarotFeedback", "response :: " + response.isSuccessful());
+                    Log.d("TarotFeedback", "response :: " + response.code());
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -191,6 +199,54 @@ public class TarotFeedbackActivity extends BaseActivity {
         }
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_feedback, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        if (id == R.id.action_info) {
+            Intent intent = new Intent(TarotFeedbackActivity.this, AboutActivity.class);
+            startActivity(intent);
+            return true;
+        } else if (id == R.id.action_renew) {
+            updateList();
+            return true;
+        } else if (id == R.id.action_share) {
+            Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("text/plain");
+            i.putExtra(Intent.EXTRA_TEXT, "https://play.google.com/store/apps/details?id=com.apex.tarot.feedback");
+            startActivity(Intent.createChooser(i, "Share and spread the word"));
+            return true;
+        } else if (id == R.id.action_invite) {
+            onInviteClicked();
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void onInviteClicked() {
+        Intent intent = new AppInviteInvitation.IntentBuilder(getString(R.string.invitation_title))
+                .setMessage(getString(R.string.invitation_message))
+                .setCallToActionText(getString(R.string.invitation_cta))
+                .build();
+        startActivityForResult(intent, 1001);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (facebookCallbackManager != null) {
+            facebookCallbackManager.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
     private void facebookLogin() {
         Log.d("TarotFeedback", "facebookLogin called");
         facebookCallbackManager = CallbackManager.Factory.create();
@@ -244,7 +300,20 @@ public class TarotFeedbackActivity extends BaseActivity {
         graphRequest.executeAsync();
     }
 
+    private void saveUsername(String username) {
+        SharedPreferences sharedPreferences = getSharedPreferences("TarotAppFeedback", Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString("user", username);
+        editor.apply();
+    }
+
+    private String getUsername() {
+        SharedPreferences sharedPreferences = getSharedPreferences("TarotAppFeedback", Context.MODE_PRIVATE);
+        return sharedPreferences.getString("user", "");
+    }
+
     private void addFeedback(final String username) {
+        Log.d("TarotFeedback", "username :: " + username);
         View dialogLayout = LayoutInflater.from(this).inflate(R.layout.feedback_alert_dialog, null);
         AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.AppCompatAlertDialogStyle);
         builder.setView(dialogLayout);
@@ -260,14 +329,13 @@ public class TarotFeedbackActivity extends BaseActivity {
         commentEditText.setText(feedbackFromPreference.getFeedback());
         feedbackRating.setRating((float) feedbackFromPreference.getRating());
 
-        if (!TextUtils.isEmpty(feedbackFromPreference.getUser())) {
+        if (!TextUtils.isEmpty(feedbackFromPreference.getObjectId())) {
             saveButton.setText(R.string.update_button_label);
         }
-
         saveButton.setOnClickListener(new View.OnClickListener() {
+
             @Override
             public void onClick(View v) {
-
                 String comment = commentEditText.getText().toString();
                 String user = username;
                 float rating = feedbackRating.getRating();
@@ -280,62 +348,93 @@ public class TarotFeedbackActivity extends BaseActivity {
                     Toast.makeText(TarotFeedbackActivity.this, getString(R.string.save_error_1), Toast.LENGTH_SHORT).show();
                     return;
                 }
-
-                final Feedback feedback = new Feedback();
-                feedback.setUser(user);
-                feedback.setFeedback(comment);
-                feedback.setRating(rating);
-
-
-                if (!TextUtils.isEmpty(feedbackFromPreference.getUser())) {
-                    showProgress(getString(R.string.update_feedback_progress));
-                    final ParseObject updateFeedbackParseObject = Feedback.createParseObject(feedback);
-                    updateFeedbackParseObject.setObjectId(feedbackFromPreference.getObjectId());
-                    updateFeedbackParseObject.saveInBackground(new SaveCallback() {
-                        public void done(ParseException e) {
-                            dismissProgress();
-                            if (e == null) {
-                                customAlertDialog.dismiss();
-                                saveToPreference(feedback, updateFeedbackParseObject.getObjectId());
-                                Toast.makeText(TarotFeedbackActivity.this, getString(R.string.save_parse_success_1), Toast.LENGTH_SHORT).show();
-                                updateList();
-                            } else {
-                                Toast.makeText(TarotFeedbackActivity.this, getString(R.string.save_parse_error_1), Toast.LENGTH_SHORT).show();
-                            }
-                        }
-                    });
-                } else {
-
-                    showProgress(getString(R.string.save_progress_1));
-
-
-                    final ParseObject feedbackParseObject = Feedback.createParseObject(feedback);
-                    feedbackParseObject.saveInBackground(new SaveCallback() {
-                        @Override
-                        public void done(ParseException e) {
-                            dismissProgress();
-                            if (e == null) {
-                                customAlertDialog.dismiss();
-                                saveToPreference(feedback, feedbackParseObject.getObjectId());
-                                Toast.makeText(TarotFeedbackActivity.this, getString(R.string.save_parse_success_1), Toast.LENGTH_SHORT).show();
-                                updateList();
-                            } else {
-                                Toast.makeText(TarotFeedbackActivity.this, getString(R.string.save_parse_error_1), Toast.LENGTH_SHORT).show();
-                            }
-                        }
-                    });
-                }
+                submitFeedback(comment, user, rating, feedbackFromPreference.getObjectId(), customAlertDialog);
             }
         });
         customAlertDialog.show();
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (facebookCallbackManager != null) {
-            facebookCallbackManager.onActivityResult(requestCode, resultCode, data);
+    private void submitFeedback(String comment, String user, double rating, String objectID, final AlertDialog customAlertDialog) {
+
+        final Feedback feedback = new Feedback();
+        feedback.setUser(user);
+        feedback.setFeedback(comment);
+        feedback.setRating(rating);
+
+        Gson gson = new Gson();
+        String requestJSON = gson.toJson(feedback);
+
+        Log.d("TarotFeedback", "requestJSON :: " + requestJSON);
+
+        showProgress(getString(R.string.save_progress_1));
+
+        MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+        RequestBody body = RequestBody.create(JSON, requestJSON);
+        Request request = null;
+        if (TextUtils.isEmpty(objectID)) {
+            request = new Request.Builder()
+                    .url(ADD_FEEDBACK)
+                    .addHeader("x-apikey", API_KEY)
+                    .post(body)
+                    .build();
+        } else {
+            request = new Request.Builder()
+                    .url(ADD_FEEDBACK + "/" + objectID)
+                    .addHeader("x-apikey", API_KEY)
+                    .put(body)
+                    .build();
         }
+        okHttpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onResponse(Call call, final Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    Headers responseHeaders = response.headers();
+                    for (int i = 0; i < responseHeaders.size(); i++) {
+                        Log.d("TarotFeedback", responseHeaders.name(i) + ": " + responseHeaders.value(i));
+                    }
+                    Gson gson = new Gson();
+                    Feedback feedback = gson.fromJson(response.body().string(), Feedback.class);
+                    saveToPreference(feedback, feedback.getObjectId());
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            dismissProgress();
+                            customAlertDialog.dismiss();
+                            Toast.makeText(TarotFeedbackActivity.this, getString(R.string.save_parse_success_1), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } else {
+                    Log.d("TarotFeedback", "response :: " + response.isSuccessful());
+                    Log.d("TarotFeedback", "response :: " + response.code());
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+
+                }
+            }
+        });
+    }
+
+    private Feedback readFromPreference() {
+        SharedPreferences sharedPreferences = getSharedPreferences("TarotAppFeedback", Context.MODE_PRIVATE);
+        Feedback feedback = new Feedback();
+        feedback.setFeedback(sharedPreferences.getString("feedback", ""));
+        feedback.setRating(sharedPreferences.getFloat("rating", 0.0f));
+        feedback.setObjectId(sharedPreferences.getString("objectID", ""));
+        return feedback;
     }
 
     private void saveToPreference(Feedback feedback, String objectID) {
@@ -344,68 +443,7 @@ public class TarotFeedbackActivity extends BaseActivity {
         editor.putString("feedback", feedback.getFeedback());
         editor.putString("user", feedback.getUser());
         editor.putFloat("rating", (float) feedback.getRating());
+        editor.putString("objectID", feedback.getObjectId());
         editor.apply();
     }
-
-    private void saveUsername(String username) {
-        SharedPreferences sharedPreferences = getSharedPreferences("TarotAppFeedback", Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putString("user", username);
-        editor.apply();
-    }
-
-    private String getUsername() {
-        SharedPreferences sharedPreferences = getSharedPreferences("TarotAppFeedback", Context.MODE_PRIVATE);
-        return sharedPreferences.getString("user", "");
-    }
-
-    private Feedback readFromPreference() {
-        SharedPreferences sharedPreferences = getSharedPreferences("TarotAppFeedback", Context.MODE_PRIVATE);
-        Feedback feedback = new Feedback();
-        feedback.setFeedback(sharedPreferences.getString("feedback", ""));
-        feedback.setUser(sharedPreferences.getString("user", ""));
-        feedback.setRating(sharedPreferences.getFloat("rating", 0.0f));
-        return feedback;
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_feedback, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_info) {
-            Intent intent = new Intent(TarotFeedbackActivity.this, AboutActivity.class);
-            startActivity(intent);
-            return true;
-        } else if (id == R.id.action_renew) {
-            updateList();
-            return true;
-        } else if (id == R.id.action_share) {
-            Intent i = new Intent(Intent.ACTION_SEND);
-            i.setType("text/plain");
-            i.putExtra(Intent.EXTRA_TEXT, "https://play.google.com/store/apps/details?id=com.apex.tarot.feedback");
-            startActivity(Intent.createChooser(i, "Share and spread the word"));
-            return true;
-        } else if (id == R.id.action_invite) {
-            onInviteClicked();
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }
-
-    private void onInviteClicked() {
-        Intent intent = new AppInviteInvitation.IntentBuilder(getString(R.string.invitation_title))
-                .setMessage(getString(R.string.invitation_message))
-                .setCallToActionText(getString(R.string.invitation_cta))
-                .build();
-        startActivityForResult(intent, 1001);
-    }
-
 }

@@ -41,7 +41,7 @@
         <activity
             android:name=".activity.AboutActivity"
             android:label="@string/title_activity_about"
-            android:parentActivityName=".activity.TarotFeedbackActivity"
+            android:parentActivityName=".activity.TarotFeedbackActivityBackup"
             android:screenOrientation="portrait"></activity>
     </application>
 
