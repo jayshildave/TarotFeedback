@@ -106,6 +106,7 @@ public class TarotFeedbackActivity extends BaseActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        dismissProgress();
                         Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -135,6 +136,7 @@ public class TarotFeedbackActivity extends BaseActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
+                            dismissProgress();
                             Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
                         }
                     });
@@ -390,6 +392,7 @@ public class TarotFeedbackActivity extends BaseActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        dismissProgress();
                         Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -419,6 +422,7 @@ public class TarotFeedbackActivity extends BaseActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
+                            dismissProgress();
                             Toast.makeText(TarotFeedbackActivity.this, getString(R.string.update_error_1), Toast.LENGTH_SHORT).show();
                         }
                     });
